@@ -1,0 +1,17 @@
+Package: limacc
+Type: Package
+Title: LiMACC
+Version: 1.0
+Author: Wenbao Yu
+Maintainer: Wenbao Yu <yuw1@email.chop.edu>
+Description: Identify significant chromatin interations for multiple chromosome conformation capture assays.
+License: GPL (>= 2)
+Encoding: UTF-8
+LazyData: true
+Imports:
+    data.table,
+    magrittr,
+    Hmisc,
+    IHW,
+    MASS
+RoxygenNote: 6.1.1

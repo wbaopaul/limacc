@@ -1,0 +1,765 @@
+
+## restriction enzyme framgent files: <chr><start><end><ID>
+readIndex <- function(index_file){
+  AllEnds <- fread(index_file, colClasses = c(V1 = 'character'), select = 1:4)
+  names(AllEnds) = c('chr', 'start', 'end', 'ID')
+
+  class(AllEnds$ID) = 'character'
+  setkey(AllEnds, ID)
+  return(AllEnds)
+}
+readIndex = cmpfun(readIndex)
+
+## read contact frequcy data
+readContact <- function(count_file, allREfrags, peakFile4HiChIP = NULL,
+                        minDist = 5000, maxDist = 2*10^6){
+  dd = fread(count_file, select = 1:3)
+  names(dd) = c('baitID', 'otherEndID', 'N')
+  class(dd$baitID) = 'character'
+  class(dd$otherEndID) = 'character'
+
+  dd[, 'bait_chr' := allREfrags[J(dd$baitID)]$chr]
+  dd[, 'bait_start' := allREfrags[J(dd$baitID)]$start]
+  dd[, 'bait_end' := allREfrags[J(dd$baitID)]$end]
+
+  dd[, 'otherEnd_chr' := allREfrags[J(dd$otherEndID)]$chr]
+  dd[, 'otherEnd_start' := allREfrags[J(dd$otherEndID)]$start]
+  dd[, 'otherEnd_end' := allREfrags[J(dd$otherEndID)]$end]
+
+  dd[, 'dist' := ifelse(bait_chr == otherEnd_chr,
+                         abs(otherEnd_start + otherEnd_end - bait_start - bait_end)/2, NA)]
+
+   ## remove very close/long distanced interactions
+  dd = dd[(dist <= maxDist & dist >= minDist) | is.na(dist)]
+
+  if(!is.null(peakFile4HiChIP)){
+   # select reads with at least one anchor overlapped with peak
+   dd.filter = NULL
+   resl = allREfrags[1, ]$end - allREfrags[1, ]$start
+   peaks = fread(peakFile4HiChIP, select = 1:3)
+   names(peaks) = c('chr', 'start', 'end')
+   peaks[, 'midP' := floor(start/2 + end/2)]
+   chrs = unique(peaks$chr)
+   dd[, 'midP1' := floor(bait_start/2 + bait_end/2)]
+   dd[, 'midP2' := floor(otherEnd_start/2 + otherEnd_end/2)]
+   for(chr0 in chrs){
+     peaks0 = peaks[chr == chr0]
+
+     ## only consider cis data
+     #dd0 = dd[bait_chr == chr0 & otherEnd_chr == chr0]
+     #dd0.left = copy(dd0)
+     #dd0.right = copy(dd0)
+
+     dd0.left = dd[bait_chr == chr0]
+     dd0.right = dd[otherEnd_chr == chr0]
+
+     dd0.left[, 'adist' := min(abs(midP1 - peaks0$midP)), by = list(baitID, otherEndID)]
+     dd0.right[, 'adist' := min(abs(midP2 - peaks0$midP)), by = list(baitID, otherEndID)]
+     dd0.left = dd0.left[adist <= resl/2]
+     dd0.right = dd0.right[adist <= resl/2]
+     dd0.left %<>% subset(select = c('baitID', 'otherEndID', 'bait_chr', 'bait_start', 'bait_end', 'otherEnd_chr', 'otherEnd_start', 'otherEnd_end', 'N', 'dist'))
+     dd0.right %<>% subset(select = c('otherEndID', 'baitID', 'otherEnd_chr', 'otherEnd_start', 'otherEnd_end', 'bait_chr', 'bait_start', 'bait_end', 'N', 'dist'))
+     names(dd0.right) = names(dd0.left)
+     dd.filter = rbind(dd.filter, dd0.left, dd0.right)
+   }
+  return(dd.filter)
+ }else{
+
+
+   dd %<>% subset(select = c('baitID', 'otherEndID', 'bait_chr', 'bait_start', 'bait_end', 'otherEnd_chr',
+                       'otherEnd_start', 'otherEnd_end', 'N', 'dist'))
+
+  return(dd)
+ }
+}
+readContact = cmpfun(readContact)
+
+## merge replicates by weight, which is based on the total counts of each replicates within 2Mb of baits
+mergeReplis <- function(count_files, allREfrags, peakFile4HiChIP = NULL,
+                        minDist = 5000, maxDist = 2*10^6){
+  dds = list()
+  setkey(allREfrags, ID)
+  rs = rep(0, length(count_files))
+  for(i in 1:length(count_files)){
+    tmp = readContact(count_files[i], allREfrags, peakFile4HiChIP, minDist, maxDist)
+    rs[i] = sum(tmp[bait_chr == otherEnd_chr]$N)
+
+    dds[[i]] = tmp
+    rm(tmp)
+  }
+  rs = rs/sum(rs)
+
+  if(any(rs < 0)) rs = rep(0.5, length(count_files))
+
+  for(i in 1:length(count_files)){
+    dds[[i]][, 'NN' := (N * rs[i])]
+    dds[[i]][, 'N' := NULL]
+  }
+
+  dd = do.call('rbind', dds)
+  rm(dds)
+
+  setkey(dd, baitID, otherEndID)
+
+
+  dd[, 'N' := floor(sum(NN)), by = list(baitID, otherEndID)]
+  dd = dd[N > 0]
+
+  dd[, 'NN' := NULL]
+
+  dd = dd[!duplicated(dd)]
+  return(dd)
+}
+mergeReplis = cmpfun(mergeReplis)
+
+
+
+## pool replicates
+poolReplis <- function(count_files, allREfrags, peakFile4HiChIP = NULL,
+                       minDist = 5000, maxDist = 2*10^6){
+  dds = list()
+
+  for(i in 1:length(count_files)){
+    dds[[i]] = readContact(count_files[i], allREfrags, peakFile4HiChIP, minDist, maxDist)
+  }
+
+
+  dd = do.call('rbind', dds)
+  rm(dds)
+
+  setkey(dd, baitID, otherEndID)
+  dd[, 'NN' := N]
+  dd[, N := sum(NN), by = list(baitID, otherEndID)]
+  dd[, 'NN' := NULL]
+  dd = dd[!duplicated(dd), ]
+  return(dd)
+}
+poolReplis = cmpfun(poolReplis)
+
+
+
+## read, filter and merge/pool
+readFilterMerge <- function(count_file, AllEndInfor, comb_rep, dtype,
+                  peakFile4HiChIP = NULL,  maxN, minLen, maxLen, minDist,
+                  maxDist, adjSeqDepth = NULL){
+
+  if(!dtype %in% c('CHIC', 'CC', '4C', 'HICHIP', 'HIC')){
+    stop('dtype should be one of CHiC, CC, 4C, HiChIP and HiC!')
+  }
+
+  if(dtype == 'CHIC'){
+    if(is.null(minLen)) minLen = 150
+    if(is.null(maxLen)) maxLen = 40000
+    if(is.null(minDist)) minDist = 1000
+  }
+  if(dtype %in% c('CC', '4C')){
+    if(is.null(minLen)) minLen = 10
+    if(is.null(maxLen)) maxLen = 40000
+    if(is.null(minDist)) minDist = 1000
+  }
+  if(dtype %in% c('HICHIP', 'HIC')){
+    if(is.null(minDist)) minDist = 20*10^3
+  }
+
+
+  if(length(count_file) > 1){
+    ## merge/pool replicates
+    if(grepl(comb_rep, pattern = 'merge')) obs_df = mergeReplis(count_file, AllEndInfor, peakFile4HiChIP, minDist, maxDist)
+    if(grepl(comb_rep, pattern = 'pool')) obs_df = poolReplis(count_file, AllEndInfor, peakFile4HiChIP, minDist, maxDist)
+
+  }else{
+    obs_df <- readContact(count_file, AllEndInfor, peakFile4HiChIP, minDist, maxDist)
+  }
+
+  obs_df = obs_df[N <= maxN, ] ## remove extremely large counts, artificial
+
+
+  setkey(AllEndInfor, ID)
+  setkey(obs_df, baitID)
+
+  ## normalized to the same sequence depth
+
+  if(!is.null(adjSeqDepth)){
+    sN = sum(obs_df$N)
+    obs_df[, 'N' := round(N * adjSeqDepth * 10^6/sN)]
+  }
+
+  obs_df[, 'len' := (otherEnd_end - otherEnd_start)]
+
+  obs_df = obs_df[len <= maxLen & len >= minLen, ]
+
+  if(ctype %in% c('CHIC', 'CC', '4C')){
+    # filter baits with very limited otherEnd contacts
+    setkey(obs_df, baitID)
+    obs_df[, 'nCis' := length(N[bait_chr == otherEnd_chr]), by = baitID]
+    obs_df %<>% .[nCis > 10]
+  }
+
+  obs_df[, c('bait_chr', 'bait_start', 'bait_end', 'otherEnd_chr',
+               'otherEnd_start', 'otherEnd_end', 'len') := NULL]  ## not used during calling limmac
+
+  return(obs_df)
+}
+readFilterMerge = cmpfun(readFilterMerge)
+
+
+
+# negative binomial modeling with coverages as covariats
+nbcovInitial <- function(N, hcrc_pr = 0.95, cover1 = NULL, cover2 = NULL){
+  len = length(N)
+  all.n = N
+  all.cover1 = cover1
+  all.cover2 = cover2
+
+  set.seed(2018)
+  if(length(N) > 50000){
+    ids = sample(1:length(N), 50000)
+    N = N[ids]
+    if(!is.null(cover1)) cover1 = cover1[ids]
+    if(!is.null(cover2)) cover2 = cover2[ids]
+  }
+
+  init.cutoff = quantile(N, hcrc_pr)
+  if(!is.null(cover1)) cover1 = cover1[N <= init.cutoff]
+  if(!is.null(cover2)) cover2 = cover2[N <= init.cutoff]
+  N = N[N <= init.cutoff]
+
+  nsratio = var(N + 1)/mean(N + 1)
+
+  if(nsratio < 1 ){
+    # treat it like poisson
+
+    pv <- tryCatch({
+      model.poisson <- glm(N ~ 1, family = 'poisson')
+      if(!is.null(cover1)){
+        model.poisson <- update(model.poisson, .~. + cover1)
+      }
+      if(!is.null(cover2)){
+        model.poisson <- update(model.poisson, .~. + cover2)
+      }
+      predicted.mu <- exp(predict(model.poisson, newdata = data.table('cover1' = all.cover1,
+                                                                      'cover2' = all.cover2)))
+
+      ppois(all.n, lambda = predicted.mu, lower.tail = FALSE)
+    }, warning = function(w){
+      ppois(all.n, lambda = mean(N), lower.tail = FALSE)
+    }, error = function(e){
+      ppois(all.n, lambda = mean(N), lower.tail = FALSE)
+    })
+
+  }else{
+    # if MLE not work, use method of moment
+    pv <- tryCatch({
+      model.nb <- glm.nb(N ~ 1)
+      if(!is.null(cover1)){
+        model.nb <- update(model.nb, .~. + cover1)
+      }
+      if(!is.null(cover2)){
+        model.nb <- update(model.nb, .~. + cover2)
+      }
+
+      theta0 = model.nb$theta
+
+      predicted.mu = exp(predict(model.nb, newdata = data.table('cover1' = all.cover1,
+                                                            'cover2' = all.cover2)))
+
+      pnbinom(all.n, mu = predicted.mu, size = theta0, lower.tail = FALSE)
+    }, warning = function(w){
+      message('NB model not convergent, method of moment was used:')
+      mu0 = mean(N)
+      theta0 = mu0^2/(var(N) - mu0)
+      pnbinom(all.n, mu = mu0,
+              size = theta0, lower.tail = FALSE)
+    }, error = function(e){
+      message('MLE failed, method of moment was used:')
+      mu0 = mean(N)
+      theta0 = mu0^2/(var(N) - mu0)
+      pnbinom(all.n, mu = mu0,
+              size = theta0, lower.tail = FALSE)
+    })
+  }
+  return(pv)
+}
+nbcovInitial = cmpfun(nbcovInitial)
+
+
+
+# negative binomial modeling with coverages as covariats
+nbcovIter <- function(N, isSig, pvs, cover1 = NULL, cover2 = NULL){
+  set.seed(2018)
+
+  if(all(isSig == 0)) return(pvs)
+  if(all(isSig == 1)) return(pvs)
+
+  all.n = N
+  all.cover1 = cover1
+  all.cover2 = cover2
+
+  N <- N[isSig == 0]  ## estimate null without reads that is pre-decided as significant
+  if(!is.null(cover1)) cover1 <- cover1[isSig == 0]
+  if(!is.null(cover2)) cover2 <- cover2[isSig == 0]
+
+  if(length(N) > 50000){
+    ids = sample(1:length(N), 50000)
+    N = N[ids]
+    if(!is.null(cover1)) cover1 = cover1[ids]
+    if(!is.null(cover2)) cover2 = cover2[ids]
+  }
+
+  nsratio = var(N + 1)/mean(N + 1)
+
+
+  if(nsratio < 1 ){
+    # treat it like poisson
+
+    pv <- tryCatch({
+      model.poisson <- glm(N ~ 1, family = 'poisson')
+      if(!is.null(cover1)){
+        model.poisson <- update(model.poisson, .~. + cover1)
+      }
+      if(!is.null(cover2)){
+        model.poisson <- update(model.poisson, .~. + cover2)
+      }
+      predicted.mu <- exp(predict(model.poisson, newdata = data.table('cover1' = all.cover1,
+                                                                      'cover2' = all.cover2)))
+
+      ppois(all.n, lambda = predicted.mu, lower.tail = FALSE)
+    }, warning = function(w){
+      ppois(all.n, lambda = mean(N), lower.tail = FALSE)
+    }, error = function(e){
+      ppois(all.n, lambda = mean(N), lower.tail = FALSE)
+    })
+
+  }else{
+    # if MLE not work, use method of moment
+    pv <- tryCatch({
+      model.nb <- glm.nb(N ~ 1)
+      if(!is.null(cover1)){
+        model.nb <- update(model.nb, .~. + cover1)
+      }
+      if(!is.null(cover2)){
+        model.nb <- update(model.nb, .~. + cover2)
+      }
+
+      theta0 = model.nb$theta
+
+      predicted.mu = exp(predict(model.nb, newdata = data.table('cover1' = all.cover1,
+                                                                'cover2' = all.cover2)))
+
+      pnbinom(all.n, mu = predicted.mu, size = theta0, lower.tail = FALSE)
+    }, warning = function(w){
+      message('NB model not convergent, method of moment was used:')
+      mu0 = mean(N)
+      theta0 = mu0^2/(var(N) - mu0)
+      pnbinom(all.n, mu = mu0,
+              size = theta0, lower.tail = FALSE)
+    }, error = function(e){
+      message('MLE failed, method of moment was used:')
+      mu0 = mean(N)
+      theta0 = mu0^2/(var(N) - mu0)
+      pnbinom(all.n, mu = mu0,
+              size = theta0, lower.tail = FALSE)
+    })
+  }
+  return(pv)
+}
+nbcovIter = cmpfun(nbcovIter)
+
+
+
+getFinalParameters_nbcov <- function(N, isSig, cover1 = NULL, cover2 = NULL){
+  len = length(N)
+  all.n = N
+
+
+  N <- N[isSig == 0]  ## estimate null without reads that is pre-decided as significant
+  if(!is.null(cover1)) cover1 = cover1[isSig == 0]
+  if(!is.null(cover2)) cover2 = cover2[isSig == 0]
+
+  nsratio = var(N + 1)/mean(N + 1)
+
+
+  if(nsratio < 1 ){
+    # treat it like poisson
+
+
+    mu0 <- tryCatch({model.poisson <- glm(N ~ 1, family = 'poisson')
+           if(!is.null(cover1)) model.poisson = update(model.poisson, .~. + cover1)
+           if(!is.null(cover2)) model.poisson = update(model.poisson, .~. + cover2)
+           model.poisson$fitted.values
+    }, warning = function(w){
+      mean(N)
+    }, error = function(e){
+      mean(N)
+    })
+
+    theta0 <- 10^6
+  }else{
+
+    # if nb not work, use poisson
+    mu0 <- tryCatch({
+      model.nb = glm.nb(N ~ 1)
+      if(!is.null(cover1)) model.nb = update(model.nb, .~. + cover1)
+      if(!is.null(cover2)) model.nb = update(model.nb, .~. + cover2)
+      model.nb$fitted.values
+
+
+    }, warning = function(w){
+      mean(N)
+
+    }, error = function(e){
+      mean(N)
+
+    })
+
+
+    theta0 <- tryCatch({
+      model.nb = glm.nb(N ~ 1)
+      if(!is.null(cover1)) model.nb = update(model.nb, .~. + cover1)
+      if(!is.null(cover2)) model.nb = update(model.nb, .~. + cover2)
+
+      model.nb$theta
+    }, warning = function(w){
+      mu0^2/(var(N) - mu0)
+    }, error = function(e){
+      mu0^2/(var(N) - mu0)
+    }
+    )
+  }
+
+
+  return(list(mu0, theta0))
+}
+getFinalParameters_nbcov = cmpfun(getFinalParameters_nbcov)
+
+
+
+
+## adj pvalue by different methods
+pvAdjust <- function(pv, adj.method = 'BH', covs = NULL, fdr = 0.1){
+
+  if(adj.method %in% c('BH', 'bonferroni', 'BY', 'fdr', 'none')){
+    return(p.adjust(pv, adj.method))
+  }
+
+  if(adj.method == 'IHW' ){
+    covs[is.na(covs)] = 10^9 ## for trans
+    obj = ihw(pv, covariates = 1/covs, alpha = fdr, nfolds = 3, nfolds_internal = 3)
+    return(obj@df$adj_pvalue)
+  }
+
+
+}
+pvAdjust = cmpfun(pvAdjust)
+
+estSingle_theta <- function(count_df){
+  set.seed(2018)
+  sele.id <- sample(1:nrow(count_df), floor(nrow(count_df)/5))
+  x <- count_df[sele.id]
+  nb.model = glm.nb(x$normN ~ offset(log(x$mu0)) + 0)
+  count_df$theta0 = nb.model$theta
+  return(count_df)
+}
+estSingle_theta = cmpfun(estSingle_theta)
+
+
+## normalization
+normaLize <- function(count_df, adjustB2B = F, adjustBait = T){
+
+  setkey(count_df, baitID)
+
+  count_df[, 'normN' := as.double(N)]
+
+  count_df[, 'nCis' := length(N[!is.na(dist)]), by = baitID]
+  count_df %<>% .[nCis > 2]
+  count_df[, 'nCis' := NULL]
+
+  bIDs = unique(count_df$baitID)
+  count_df[, 'isB2B' := ifelse(otherEndID %in% bIDs, 1L, 0L)]
+
+  ## adjust bait to bait effects
+  if(adjustB2B){
+    if(any(count_df$isB2B == 1)){
+      tfun <- function(isB2B, N){
+        ff = rep(1, length(N))
+        ids = which(isB2B == 1)
+        if(length(ids) ==0 ) return(ff)
+        nume = median(N[-ids])
+        deno = median(N[ids])
+        ff[ids] = nume/deno
+        if(any(is.na(ff))) ff = 1
+        return(ff)
+      }
+
+      count_df[, 'b2b_f0' := tfun(isB2B, normN), by = baitID]
+      count_df[, 'b2b_f' := pmin(b2b_f0, 1)]
+
+
+      count_df[, 'normN' := ifelse(isB2B == 1, b2b_f * normN, normN)]
+
+
+      count_df[, c('b2b_f', 'b2b_f0') := NULL]
+    }
+    #count_df[, c('isB2B') := NULL]
+  }
+
+
+  # adjust bait biase
+  if(adjustBait){
+    count_df[, "mN" := mean(log2(normN[!is.na(dist)] + 1)), by = baitID]
+    NC = quantile(count_df$mN, 0.5)
+    NC = quantile(unique(count_df$mN), 0.5)
+
+    count_df[, 'normN' := round(2^(NC/mN * log2(normN +1)))]
+
+    count_df[, c("mN") := NULL]
+    rm(NC)
+
+  }
+
+
+  count_df = calCoverage(count_df)
+
+  if(!adjustBait) count_df = count_df[!is.na(dist)]
+
+  count_df[, "normN" := as.double(normN)]
+
+  return(count_df)
+
+}
+normaLize = cmpfun(normaLize)
+
+
+
+## fit background model iteratively
+fitBG <- function(count_df, numG = 200, hcrc_pr = 0.95,  nIter = 10,  train.adjm = 'BH'){
+
+  setkey(count_df, baitID)
+
+  if(nrow(count_df[!is.na(dist)])/length(unique(count_df$baitID)) < numG){
+    message ("numG too bigger; A smaller numG was tried !")
+    numG <<- floor(nrow(count_df[!is.na(dist)])/length(unique(count_df$baitID)))
+  }
+
+  ## group by distance
+  bds = unique(quantile(count_df$dist, (1:numG)/numG, na.rm = T))
+  names(bds) = NULL
+  count_df[, 'g' := cut2(dist, cuts = bds)]
+  count_df[, g := as.character(g)]
+  ug = unique(count_df$g)
+
+
+  count_df[is.na(g)]$g = "inf"
+  rm(bIDs, bds)
+  setkey(count_df, g)
+
+  ## initiate model
+
+  count_df[, 'pv' := nbcovInitial(normN, hcrc_pr), by = g]
+
+  #adjust pvalue locally by BH
+  tfdr = 0.1 ## training fdr as 0.1
+
+
+  count_df[, 'pv_adj' := pvAdjust(pv, train.adjm,  w, tfdr)]
+
+
+  ## do interatively
+  count_df[, 'isSig_new' := ifelse(pv_adj <= tfdr, 1L, 0L)]
+
+  k = 1
+  repeat{
+
+    message(paste("the ", k, "th ", "iteration is done:"))
+    message(paste(nrow(count_df[isSig_new == 1]), " significant loops found!"))
+
+    k = k + 1
+    count_df[, 'isSig_old' := isSig_new]
+
+    count_df[, 'pv' := nbcovIter(normN, isSig_old, pv), by = g]
+
+
+    ## adjust p-values for each group
+
+    count_df[, 'pv_adj' := pvAdjust(pv, train.adjm,  w, tfdr)]
+
+
+    count_df[, 'isSig_new' := ifelse(pv_adj <= tfdr, 1L, 0L)]
+    if(k >= nIter || sum(abs(count_df$isSig_new - count_df$isSig_old)) <= sum(count_df$isSig_old)/100) {
+      break
+    }
+    gc()
+  }
+
+  message(paste("Model fitting was done and The final number of iteration is", k ))
+
+  # get global parames/goodness of fit for each group
+  count_df[, c('mu0', 'theta0') := getFinalParameters_nbcov(normN, isSig_new), by = g]
+
+  message(paste(nrow(count_df[isSig_new == 1]), " sig loops found..."))
+
+  count_df[, c('isSig_old') := NULL]
+
+  return(count_df)
+
+}
+fitBG = cmpfun(fitBG)
+
+
+## update adj pvalue by IHW/weight fdr method
+updateAdjPvalue <- function(count_df, adj.method = 'IHW', updateMethod = 'smooth',
+                            updateTheta = FALSE, tfdr = 0.1){
+
+  # get full function of distance using group means
+  interpolate_mu <- function(count_df){
+    count_cis = count_df[!is.na(dist)]
+    count_cis[, 'ave.dist' := mean(dist), by = g]
+    tmp = subset(count_cis, select = c('ave.dist', 'mu0'))
+    tmp %<>% .[!duplicated(.)]
+    tmp %<>% .[order(ave.dist)]
+    dist0 = log10(tmp$ave.dist)
+    mu0 = log2(tmp$mu0)
+
+    interp.res <- splinefun(dist0, mu0)
+
+    count_cis$mu0 = interp.res(log10(count_cis$dist))
+    count_cis[, 'mu0' := 2^mu0]
+    count_cis[, 'ave.dist' := NULL]
+    return(rbind(count_cis, count_df[is.na(dist)]))
+  }
+
+
+  ## interpolate smooth
+  if(!updateMethod %in% c('noupdate')){
+    count_df = interpolate_mu(count_df)
+  }
+
+
+  ## add bait specifici
+
+  if(updateTheta) count_df = estSingle_theta(count_df)
+
+
+  count_df[, 'pv' := pnbinom(normN, mu = mu0, size = theta0, lower.tail = F)]
+
+
+  count_df[, 'pv_adj' := pvAdjust(pv, adj.method, dist, tfdr)]
+
+
+  count_df[, 'isSig_new' := ifelse(pv_adj <= tfdr, 1L, 0L)]
+
+  message(paste(nrow(count_df[isSig_new == 1]), " sig loops found..."))
+
+  count_df[, c('isSig_new',  'g', 'bd') := NULL]
+
+  # save significant loops
+  gc()
+  setkey(count_df, baitID)
+  count_df <- subset(count_df, select = c("baitID", "otherEndID",
+                                          "dist", "N", 'pv', 'pv_adj'))
+  sigRes = count_df[pv_adj <= fdr, ]
+  #sigRes[, 'score' := round(-log10(pv_adj), 3)]
+  return(sigRes)
+
+}
+updateAdjPvalue = cmpfun(updateAdjPvalue)
+
+
+## index_file: the name of restriction enzyme file for CHiC or index_file for HiChIP
+## count_file: contact map file(s)
+## out_filename: output file name
+## comb_rep: if length(count_file)>1, merge or pool replicates (default merge for CHiC; pool for HiChIP)
+## dtype: data type, CHiC/CC/HiChIP
+## peakFile4HiChIP: file of coordinate of 1D peak (bed file or similar format) for HiChIP, NULL for other type of data
+## numG: number of groups for limacc (default 100)
+## hcrc_pr: initial guess of backgound (default 0.9)
+## fdr: fdr cutoff used for the final output (default 0.05)
+## nIter: maxmimum number of iterations (default 20)
+## maxN: filter contacts that wiht more than maxN counts (default 100)
+## minLen: filter otherEnd fragments with length smaller than minLen
+## maxLen: filter otherEnd fragments with length greater than maxLen
+## adj.method: method for adjusting p-value (default 'IHW')
+## sdepth: the number (in million) to which the sequence depth should be normalized, default NULL means do not adjust the total
+##         sequence depth
+## updateMethod: smooth or noupdate (default 'smooth')
+
+
+## assume the first column is the bait
+LiMACC <- function(index_file, count_file, out_filename, comb_rep = 'merge', dtype = 'CHiC',
+                        peakFile4HiChIP = NULL, numG = 100, hcrc_pr = 0.9, fdr = 0.1,
+                        nIter = 20, maxN = 10000, minLen = NULL, maxLen = NULL,
+                        minDist = NULL, maxDist = 2*10^6, adj.method = 'IHW',
+                        adjSeqDepth = NULL, updateMethod = 'smooth'){
+  dtype = toupper(dtype)
+
+  AllEndInfor <- readIndex(index_file)  ## make this as global
+
+  message("read, filter and merge...")
+  obs_df = readFilterMerge(count_file, AllEndInfor, comb_rep, dtype, peakFile4HiChIP,
+                              maxN, minLen, maxLen, minDist, maxDist, adjSeqDepth)
+
+
+
+  if(dtype %in% c('CHIC', 'CC', '4C') || !is.null(peakFile4HiChIP)){
+
+    adjB2B = ifelse(dtype %in% c('CHIC', 'CC', '4C'), TRUE, FALSE)
+    obs_df = normaLize(obs_df,  adjustB2B = adjB2B, adjustBait = T)
+
+    obs_df = fitBG(obs_df, numG, hcrc_pr, nIter, 'BH')
+
+    Res = updateAdjPvalue(obs_df, adj.method,  updateMethod = updateMethod,
+                          updateTheta = adjB2B)
+
+    Res[, bait_chr := AllEndInfor[J(Res$baitID), chr]]
+    Res[, bait_start := AllEndInfor[J(Res$baitID), start]]
+    Res[, bait_end := AllEndInfor[J(Res$baitID), end]]
+
+    Res[, otherEnd_chr := AllEndInfor[J(Res$otherEndID), chr]]
+    Res[, otherEnd_start := AllEndInfor[J(Res$otherEndID), start]]
+    Res[, otherEnd_end := AllEndInfor[J(Res$otherEndID), end]]
+
+    Res = subset(Res, select =  c("baitID", 'bait_chr', "bait_start", "bait_end",
+                                  "otherEnd_chr", "otherEnd_start", "otherEnd_end",
+                                  "dist", "N", 'pv', 'pv_adj'))
+
+    if(dtype == 'HICHIP') names(Res)[1:7] =   c('peakID', 'chr1', "start1", "end1",
+                                                "chr2", "start2", "end2")
+
+  }else{
+    obs_df = normaLize(obs_df, adjustB2B = FALSE, adjustBait = FALSE)
+
+    obs_df = fitBG(obs_df, numG, hcrc_pr, nIter, 'BH')
+
+    Res = updateAdjPvalue(obs_df, adj.method,  updateMethod = updateMethod)
+    rm(obs_df)
+
+    Res[, bait_chr := AllEndInfor[J(Res$baitID), chr]]
+    Res[, bait_start := AllEndInfor[J(Res$baitID), start]]
+    Res[, bait_end := AllEndInfor[J(Res$baitID), end]]
+
+    Res[, otherEnd_chr := AllEndInfor[J(Res$otherEndID), chr]]
+    Res[, otherEnd_start := AllEndInfor[J(Res$otherEndID), start]]
+    Res[, otherEnd_end := AllEndInfor[J(Res$otherEndID), end]]
+
+    Res = subset(Res, select =  c('bait_chr', "bait_start", "bait_end",
+                                  "otherEnd_chr", "otherEnd_start", "otherEnd_end",
+                                  "dist", "N", 'pv', 'pv_adj'))
+    names(Res)[1:6] =  c('chr1', "start1", "end1",
+                         "chr2", "start2", "end2")
+
+  }
+
+
+
+  write.table(Res, file = out_filename, sep = '\t', quote = FALSE, row.names = FALSE)
+
+
+  invisible(Res)
+}
+
+LiMACC = cmpfun(LiMACC)
+
+
+
+
+

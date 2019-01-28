@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1548581791215.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "2|34|9|0|\n14|58|73|0|\n78|58|111|0|\n118|57|135|0|\n143|47|201|0|\n207|74|281|0|\n610|61|663|0|\n",
+    "hash" : "1885845419",
+    "id" : "B3ABB172",
+    "lastKnownWriteTime" : 1548581870,
+    "last_content_update" : 1548597769212,
+    "path" : "~/Documents/limacc/R/LiMACC_light.R",
+    "project_path" : "R/LiMACC_light.R",
+    "properties" : {
+        "cursorPosition" : "0,0",
+        "scrollLine" : "0"
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
