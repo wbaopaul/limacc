@@ -62,7 +62,7 @@ install.packages('path to limacc_1.0.tar.gz', type = 'source', rep = NULL)
 
 ```
 library(limacc)
-help(LiMACC)
+help(limacc)
 
 
 
