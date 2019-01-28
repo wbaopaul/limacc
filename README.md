@@ -1,6 +1,6 @@
 # LiMACC
 LiMACC is an framework of calling significant interactions from multiple types of chromosome conformation capture assays, including Capture-C, Capture-HiC and HiChIP experiments.
-It's implemented through a R package limacc.
+It's implemented through a R package *limacc*.
 
 
 ## Install from Github 
@@ -23,7 +23,7 @@ install.packages('path to limacc_1.0.tar.gz', type = 'source', rep = NULL)
 
 ## Required Inputs
 * *fragment_file* A bed file (or in similar format) indicates the genomic coordinates of either the restriction enzyme fragments for Capture-C, Capture-HiC, or the binned fragments, in 5kb for instance, for HiChIP data.  
-  - for Capture-C or Capture-HiC data, an example of *fragment_file (chromosome staet end id)* to indicate the genomic location of the HindIII enzyme fragment :
+  - for Capture-C or Capture-HiC data, an example of *fragment_file (chromosome start end id)* to indicate the genomic location of the HindIII enzyme fragment :
 
   ```
   chr1	0	3002504	chr1_1
@@ -48,7 +48,7 @@ install.packages('path to limacc_1.0.tar.gz', type = 'source', rep = NULL)
   chr1_15	chr1_20	5
   ......
   ```
-And note that the first two columns should be the included in the fourth columns of the *index_file*.
+  **Note that the first two columns in the *contact_file* should be included in the fourth column of the *fragment_file*.**
 
 ## Output
   * data frames providing the significant interactions
