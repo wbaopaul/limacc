@@ -665,26 +665,25 @@ updateAdjPvalue <- function(count_df, adj.method = 'IHW', updateMethod = 'smooth
 updateAdjPvalue = cmpfun(updateAdjPvalue)
 
 
-## index_file: the name of restriction enzyme file for CHiC or index_file for HiChIP
-## count_file: contact map file(s)
-## out_filename: output file name
-## comb_rep: if length(count_file)>1, merge or pool replicates (default merge for CHiC; pool for HiChIP)
-## dtype: data type, CHiC/CC/HiChIP
-## peakFile4HiChIP: file of coordinate of 1D peak (bed file or similar format) for HiChIP, NULL for other type of data
-## numG: number of groups for limacc (default 100)
-## hcrc_pr: initial guess of backgound (default 0.9)
-## fdr: fdr cutoff used for the final output (default 0.05)
-## nIter: maxmimum number of iterations (default 20)
-## maxN: filter contacts that wiht more than maxN counts (default 100)
-## minLen: filter otherEnd fragments with length smaller than minLen
-## maxLen: filter otherEnd fragments with length greater than maxLen
-## adj.method: method for adjusting p-value (default 'IHW')
-## sdepth: the number (in million) to which the sequence depth should be normalized, default NULL means do not adjust the total
-##         sequence depth
-## updateMethod: smooth or noupdate (default 'smooth')
+#' call LiMACC algorithm
+#' @param index_file the name of restriction enzyme file for CHiC or index_file for HiChIP
+#' @param count_file contact map file(s)
+#' @param out_filename output file name
+#' @param comb_rep if length(count_file)>1, merge or pool replicates (default merge for CHiC; pool for HiChIP)
+#' @param dtype data type, CHiC/CC/HiChIP
+#' @param peakFile4HiChIP file of coordinate of 1D peak (bed file or similar format) for HiChIP, NULL for other type of data
+#' @param numG number of groups for limacc (default 100)
+#' @param hcrc_pr initial guess of backgound (default 0.9)
+#' @param fdr fdr cutoff used for the final output (default 0.05)
+#' @param nIter maxmimum number of iterations (default 20)
+#' @param maxN filter contacts that wiht more than maxN counts (default 100)
+#' @param minLen filter otherEnd fragments with length smaller than minLen
+#' @param maxLen filter otherEnd fragments with length greater than maxLen
+#' @param adj.method method for adjusting p-value (default 'IHW')
+#' @param sdepth the number (in million) to which the sequence depth should be normalized, default NULL means do not adjust the total
+#'         sequence depth
+#' @param updateMethod smooth or noupdate (default 'smooth')
 
-
-## assume the first column is the bait
 LiMACC <- function(index_file, count_file, out_filename, comb_rep = 'merge', dtype = 'CHiC',
                         peakFile4HiChIP = NULL, numG = 100, hcrc_pr = 0.9, fdr = 0.1,
                         nIter = 20, maxN = 10000, minLen = NULL, maxLen = NULL,
