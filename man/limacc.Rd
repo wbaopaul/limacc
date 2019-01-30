@@ -4,45 +4,50 @@
 \alias{limacc}
 \title{LiMACC algorithm}
 \usage{
-limacc(fragment_file, contact_file, out_filename, comb_rep = "merge",
-  dtype = "CHiC", peakFile4HiChIP = NULL, numG = 100,
-  hcrc_pr = 0.9, fdr = 0.1, nIter = 20, maxN = 10000,
-  minLen = NULL, maxLen = NULL, minDist = NULL, maxDist = 2 * 10^6,
-  adj.method = "IHW", adjSeqDepth = NULL, updateMethod = "smooth")
+limacc(fragment_file, contact_file, dtype = "CHiC",
+  peakFile4HiChIP = NULL, out_filename = "sigRes.txt",
+  comb_rep = "merge", numG = 100, hcrc = 0.9, fdr = 0.1,
+  nIter = 20, maxN = 10000, minLen = NULL, maxLen = NULL,
+  minDist = 1000, maxDist = 2 * 10^6, adj.method = "IHW",
+  adj.sdepth = NULL, updateMethod = "smooth")
 }
 \arguments{
 \item{fragment_file}{the name of restriction enzyme file for CHiC/CC or binned fragment_file for HiChIP}
 
 \item{contact_file}{contact map file(s)}
 
-\item{out_filename}{output file name}
-
-\item{comb_rep}{if length(contact_file)>1, merge or pool replicates (default merge for CHiC; pool for HiChIP)}
-
 \item{dtype}{data type, CHiC/CC/HiChIP}
 
 \item{peakFile4HiChIP}{file of coordinate of 1D peak (bed file or similar format) for HiChIP, NULL for other type of data}
 
+\item{out_filename}{output file name}
+
+\item{comb_rep}{if length(contact_file)>1, merge or pool replicates (default merge for CHiC; pool for HiChIP)}
+
 \item{numG}{number of groups for limacc (default 100)}
 
-\item{hcrc_pr}{initial guess of backgound (default 0.9)}
+\item{hcrc}{initial guess of backgound proportion (default 0.9)}
 
 \item{fdr}{fdr cutoff used for the final output (default 0.05)}
 
 \item{nIter}{maxmimum number of iterations (default 20)}
 
-\item{maxN}{filter contacts that wiht more than maxN counts (default 100)}
+\item{maxN}{filter contacts that wiht more than maxN counts (default 10000)}
 
 \item{minLen}{filter otherEnd fragments with length smaller than minLen}
 
 \item{maxLen}{filter otherEnd fragments with length greater than maxLen}
 
+\item{minDist}{minimum distance in bp, default 1000bp}
+
+\item{maxDist}{maximum distance in bp, default 2Mb}
+
 \item{adj.method}{method for adjusting p-value (default 'IHW')}
 
-\item{updateMethod}{smooth or noupdate (default 'smooth')}
-
-\item{sdepth}{the number (in million) to which the sequence depth should be normalized, default NULL means do not adjust the total
+\item{adj.sdepth}{the number (in million) to which the sequence depth should be normalized, default NULL means do not adjust the total
 sequence depth}
+
+\item{updateMethod}{smooth or noupdate (default 'smooth')}
 }
 \description{
 Identify significant chromatin interations for multiple chromosome conformation capture assays

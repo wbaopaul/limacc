@@ -1,3 +1,12 @@
+library(data.table)
+library(magrittr)
+library(IHW)
+library(MASS)
+library(Hmisc)
+library(compiler)
+
+
+## list of functions ####
 
 ## restriction enzyme framgent files: <chr><start><end><ID>
 readFragment <- function(fragment_file){
@@ -678,7 +687,7 @@ updateAdjPvalue = cmpfun(updateAdjPvalue)
 #'         sequence depth
 #' @param updateMethod smooth or noupdate (default 'smooth')
 
-limacc <- function(fragment_file, contact_file, dtype = 'CHiC',peakFile4HiChIP = NULL,
+limacc <- function(fragment_file, contact_file, dtype = 'CHiC', peakFile4HiChIP = NULL,
                    out_filename = 'sigRes.txt', comb_rep = 'merge', numG = 100, hcrc = 0.9,
                    fdr = 0.1, nIter = 20, maxN = 10000, minLen = NULL, maxLen = NULL,
                    minDist = 1000, maxDist = 2*10^6, adj.method = 'IHW',
@@ -690,7 +699,6 @@ limacc <- function(fragment_file, contact_file, dtype = 'CHiC',peakFile4HiChIP =
   if(is.null(comb_rep)){
     comb_rep = ifelse(dtype == 'HICHIP', 'pool', 'merge')
   }
-
 
   message("read, filter and merge...")
   obs_df = readFilterMerge(contact_file, AllEndInfor, comb_rep, dtype, peakFile4HiChIP,
@@ -759,5 +767,39 @@ limacc = cmpfun(limacc)
 
 
 
+## start running ####
+
+args = commandArgs(T)
+
+fragment_file = args[1]
+contact_file = args[2]
+dtype = args[3]
+peakFile4HiChIP = args[4]
+out_filename = args[5]
+comb_rep = args[6]
+numG = as.integer(args[7])
+hcrc = as.numeric(args[8])
+fdr = as.numeric(args[9])
+nIter = as.integer(args[10])
+maxN = as.integer(args[11])
+minLen = args[12]
+maxLen = args[13]
+minDist = as.numeric(args[14])
+maxDist = as.numeric(args[15])
+adj.method = args[16]
+adj.sdepth = args[17]
+updateMethod = args[18]
+
+peakFile4HiChIP = ifelse(peakFile4HiChIP == 'NULL', NULL, peakFile4HiChIP)
+comb_rep = ifelse(comb_rep == 'NULL', NULL, comb_rep)
+minLen = ifelse(minLen == 'NULL', NULL, minLen)
+maxLen = ifelse(maxLen == 'NULL', NULL, maxLen)
 
 
+
+
+limacc(fragment_file, contact_file, dtype, peakFile4HiChIP,
+                   out_filename, comb_rep, numG, hcrc,
+                   fdr, nIter, maxN, minLen, maxLen,
+                   minDist, maxDist, adj.method,
+                   adj.sdepth, updateMethod)
