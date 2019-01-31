@@ -76,7 +76,7 @@ help(limacc)
   ```
 * for more help, see
   ```
-  limacc4command --help
+  ./limacc4command --help
   ```
 
 

@@ -72,10 +72,10 @@ comb_rep=NULL
 out_filename="sigRes.txt"
 updateMethod="smooth"
 
-while getopts ":f:c:t:p:h:out_filename:comb_rep:numG:nIter:fdr:maxN:minLen:maxLen:minDist:maxDist:hcrc:adj_method:adj_sdepth:updateMethod" OPT
+while getopts ":f:c:t:p:out_filename:comb_rep:numG:nIter:fdr:maxN:minLen:maxLen:minDist:maxDist:hcrc:adj_method:adj_sdepth:updateMethod:h" OPT
 do
     case $OPT in
-	      f) fragment_file=$OPTARG;;
+	    f) fragment_file=$OPTARG;;
         c) contact_file=$OPTARG;;
         t) dtype=$OPTARG;;
         p) peakFile4HiChIP=$OPTARG;;
@@ -93,21 +93,16 @@ do
         adj_method) adj_method=$OPTARG;;
         adj_sdepth) adj_sdepth=$OPTARG;;
         updateMethod) updateMethod=$OPTARG;;
-	h) help ;;
-	\?)
-	    echo "Invalid option: -$OPTARG" >&2
-	    usage
-	    exit 1
-	    ;;
-	:)
-	    echo "Option -$OPTARG requires an argument." >&2
-	    usage
-	    exit 1
-	    ;;
+	    h) help;;
+	    *)
+	      echo "Option -$OPTARG requires an argument." >&2
+	      usage
+	      exit 1
+	      ;;
     esac
 
 done
-
+#shift $((OPTIND-1))
 
 
 if [[ -z $contact_file ]] || [[ -z $fragment_file ]] ; then
