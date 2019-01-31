@@ -790,13 +790,14 @@ adj.method = args[16]
 adj.sdepth = args[17]
 updateMethod = args[18]
 
-peakFile4HiChIP = ifelse(peakFile4HiChIP == 'NULL', NULL, peakFile4HiChIP)
-comb_rep = ifelse(comb_rep == 'NULL', NULL, comb_rep)
-minLen = ifelse(minLen == 'NULL', NULL, minLen)
-maxLen = ifelse(maxLen == 'NULL', NULL, maxLen)
+if(peakFile4HiChIP == 'NULL') peakFile4HiChIP = NULL
+if(comb_rep == 'NULL') comb_rep = NULL
+if(minLen == 'NULL') minLen = NULL
+if(maxLen == 'NULL') maxLen = NULL
+if(adj.sdepth == 'NULL') adj.sdepth = NULL
 
-
-
+contact_file = gsub(' ', '', contact_file)
+contact_file = unlist(strsplit(contact_file,  ','))
 
 limacc(fragment_file, contact_file, dtype, peakFile4HiChIP,
                    out_filename, comb_rep, numG, hcrc,

@@ -1,0 +1,136 @@
+#!/bin/bash
+
+
+function usage {
+    echo -e "usage : ./limacc.sh -f fragment_file -c contact_files -t dtype [--out_filename] [-h] [-p peakFile4HiChIP][--comb_rep] [--numG] [--fdr] [--nIter] [--hcrc] [maxN] [--maxLen] [--minLen] [--maxDist] [--minDist] [--adj_method] [--adj_sdepth][--updateMethod] "
+    echo -e "Use option -h|--help for more information"
+}
+
+function help {
+    usage;
+    echo "Run LiMACC algorithm from command line "
+    echo "---------------"
+    echo "OPTIONS"
+    echo
+    echo "   -f|--fragment_file: the name of restriction enzyme file for CHiC/CC or binned fragment_file for HiChIP"
+    echo "   -c|--contact_files: contact map file(s), when more than one file given, use comma to seprate"
+    echo "   -t|--data type: CHiC, CC or HiChIP "
+    echo "   -p|--peakFile4HiChIP: file of coordinate of 1D peak (bed file or similar format) for HiChIP, NULL for other type of data"
+    echo "   [--out_filename] out_filename  : output file name"
+    echo "   [--comb_rep] comb_rep : merge or pool replicates, default merge for CHiC and pool for HiChIP "
+    echo "   [--numG]: number of groups, default 100"
+    echo "   [--fdr]: final fdr cutoff, default 0.05"
+    echo "   [--nIter]: number of iteration, default 20"
+    echo "   [--hcrc]: initial guess of backgound proportion, default 0.9"
+    echo "   [--maxN]: filter contacts that wiht more than maxN counts (default 10000)"
+    echo "   [--minLen]: filter otherEnd fragments with length smaller than minLen"
+    echo "   [--maxLen]: filter otherEnd fragments with length greater than maxLen"
+    echo "   [--minDist]: minimum distance in bp, default 1000bp"
+    echo "   [--maxDist]: maximum distance in bp, default 2Mb"
+    echo "   [--adj_method]: method for adj_sting p-value (default 'IHW')"
+    echo "   [--adj_sdepth]: the number (in million) to which the sequence depth should be normalized, default NULL means do not adj_st the totalsequence depth "
+    echo "   [--updateMethod]: smooth or noupdate (default 'smooth')"
+    exit;
+}
+
+if [ $# -lt 1 ]
+then
+  usage
+  exit
+fi
+
+
+
+# Transform long options to short ones
+for arg in "$@"; do
+  shift
+  case "$arg" in
+      "--fragment_file") set -- "$@" "-f" ;;
+      "--contact_file")   set -- "$@" "-c" ;;
+      "--peakFile4HiChIP")   set -- "$@" "-p" ;;
+      "--dtype") set -- "$@" "-t" ;;
+      "--help")   set -- "$@" "-h" ;;
+       *)        set -- "$@" "$arg"
+  esac
+done
+
+
+## set default parameters
+peakFile4HiChIP=NULL
+numG=100
+nIter=20
+hcrc=0.9
+maxN=10000
+minLen=NULL
+maxLen=NULL
+minDist=1000
+maxDist=2000000
+adj_method="IHW"
+adj_sdepth=NULL
+fdr=0.05
+comb_rep=NULL
+out_filename="sigRes.txt"
+updateMethod="smooth"
+
+while getopts ":f:c:t:p:h:out_filename:comb_rep:numG:nIter:fdr:maxN:minLen:maxLen:minDist:maxDist:hcrc:adj_method:adj_sdepth:updateMethod" OPT
+do
+    case $OPT in
+	      f) fragment_file=$OPTARG;;
+        c) contact_file=$OPTARG;;
+        t) dtype=$OPTARG;;
+        p) peakFile4HiChIP=$OPTARG;;
+        numG) numG=$OPTARG;;
+        comb_rep) comb_rep=$OPTARG;;
+        out_filename) out_filename=$OPTARG;;
+        nIter) nIterp=$OPTARG;;
+        fdr) fdr=$OPTARG;;
+        maxN) maxN=$OPTARG;;
+        minLen) minLen=$OPTARG;;
+        maxLen) maxLen=$OPTARG;;
+        minDist) minDist=$OPTARG;;
+        maxDist) maxDist=$OPTARG;;
+        hcrc) hcrc=$OPTARG;;
+        adj_method) adj_method=$OPTARG;;
+        adj_sdepth) adj_sdepth=$OPTARG;;
+        updateMethod) updateMethod=$OPTARG;;
+	h) help ;;
+	\?)
+	    echo "Invalid option: -$OPTARG" >&2
+	    usage
+	    exit 1
+	    ;;
+	:)
+	    echo "Option -$OPTARG requires an argument." >&2
+	    usage
+	    exit 1
+	    ;;
+    esac
+
+done
+
+
+
+if [[ -z $contact_file ]] || [[ -z $fragment_file ]] ; then
+    echo "no contact_file or fragment_file"
+    exit 1
+fi
+
+if [[ -z $dtype ]] ; then
+    echo "no data type specified"
+    exit 1
+fi
+
+
+
+
+## call R
+#script_dir=$(dirname "$0")
+
+R --vanilla --args $fragment_file $contact_file $dtype $peakFile4HiChIP $out_filename $comb_rep $numG $hcrc $fdr $nIter $maxN $minLen $maxLen $minDist $maxDist ${adj_method} ${adj_sdepth} $updateMethod < limacc_withArgs.R
+
+
+
+
+
+
+
