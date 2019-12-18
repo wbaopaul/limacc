@@ -52,7 +52,7 @@ install.packages('path to limacc_1.0.tar.gz', type = 'source', rep = NULL)
   **Note that the first two columns in the *contact_file* should be included in the fourth column of the *fragment_file*.**
 
 * *dtype* data type, 'CHiC', 'CC' or 'HiChIP'
-* *peakFile4HiChIP* Bed file of 1D peak as virtual viewpoints for HiChIP, set as NULL for dtype is not 'HiChIP'
+* *peakFile4HiChIP* Bed file of 1D peak as virtual viewpoints for HiChIP, set as NULL when dtype is not 'HiChIP'
 
 ## Output
   * A data frame providing the significant interactions
