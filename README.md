@@ -67,7 +67,7 @@ help(limacc)
 
 ```
 
-## Alternative run through bash command line (for Linux and maxOS)
+## Alternative run through bash command line (for Linux and macOS)
 
 * copy scripts *limacc4command* and *limacc_withArgs.R* in this reporitory to the same directory, for example, current directory, then
 
